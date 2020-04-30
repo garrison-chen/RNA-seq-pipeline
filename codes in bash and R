@@ -1,0 +1,330 @@
+---
+title: "RNAseq1"
+author: Meghana Srinath(2581640), Guangyi Chen(2581241)
+date: April 29, 2020
+theme: united
+highlight: tango
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: false
+tags: rnaseq
+---
+
+
+# Get to know the system
+
+``` {bash}
+# start a screen
+screen -S screen_name
+```
+``` {bash}
+# Force resume a screen
+screen -rd screen_name
+``` 
+``` {bash}
+# check how many CPUs and how much RAM 
+# CPUs: 21.3%, RAM: 0.0
+htop
+```
+``` {bash}
+# disk
+df -h
+df -h /vol/*
+```
+``` {bash}
+# group we belong to: Meghana student rnaseq1
+groups
+```
+``` {bash}
+# find uour working directory
+find /vol -group rnaseq1
+```
+
+
+# Conda and Bioconda
+``` {bash}
+# activate and excute the conda
+source /vol/data/conda/base/bin/activate
+```
+``` {bash}
+# Create conda
+conda create --clone /vol/data/conda/envs/core -p /vol/disk1/rnaseq1/conda/conda_envi
+conda activate /vol/disk1/rnaseq1/conda/conda_envi
+conda install bedtools
+```
+
+# RNA-seq pipeline
+
+``` {bash}
+# organize raw data: symbolic link
+mkdir fastq
+ln -s /vol/data/fastq/RNA-Seq/liver* data/fastq/
+```
+``` {bash}
+# start the pipeline
+# creat the folder 'pipeline' inside data
+mkdir pipeline
+# generate the sample sheet
+ls $PWD/data/fastq/*
+ls $PWD/data/fastq/* \| sed -re "s/.*\/(.*)_(.*).fastq.gz/\1_\2/g" 
+ls $PWD/data/fastq/* \| sed -re "s/.*\/(.*)_(.*).fastq.gz/\1_\2\t\0/g" >pipeline.input.tsv
+```
+``` {bash}
+``` {bash}
+
+```
+# check pipeline
+vim /vol/data/fastq/
+```
+``` {bash}
+# create the pipeline sheet file and edit it to follow the input format
+cat pipeline.input.tsv
+```
+
+``` {bash}
+# Load the Conda environment with the necessary executables:
+source /vol/data/conda/base/bin/activate /vol/data/conda/envs/core
+```
+``` {bash} 
+# Test if you have access to nextflow:
+which nextflow
+```
+``` {bash}
+# Inspect the file and make sure there are no surprises
+cp /vol/data/pipelines/nextflow/nextflow.config .
+```
+``` {bash}
+# reference files
+--genome /vol/data/reference/mm10/rna-seq/mm10_no_alt_analysis_set_ENCODE.fasta 
+--annotation /vol/data/reference/mm10/rna-seq/gencode.vM2.annotation.gtf
+--genomeIndex /vol/data/reference/mm10/rna-seq/STAR_index
+```
+``` {bash}
+# Execute the pipeline
+NXF_HOME=/vol/data/pipelines/nextflow nextflow run grape-nf \
+-with-singularity \
+--with-ref-prefix - \
+--steps mapping,bigwig,quantification \
+--genomeIndex /vol/data/reference/mm10/rna-seq/STAR_index \
+--annotation /vol/data/reference/mm10/rna-seq/gencode.vM2.annotation.gtf \
+--genome /vol/data/reference/mm10/rna-seq/mm10_no_alt_analysis_set_ENCODE.fasta \
+--index /vol/disk1/rnaseq1/pipeline/pipeline_input.tsv
+```
+
+# Quality Control, step1: FastQC
+``` {bash}
+# Create a new conda environment
+mkdir conda_envi /vol/disk1/rnaseq1/conda/
+```
+``` {bash}
+# Install fastqc and multiqc
+source /vol/data/conda/base/bin/activate
+conda ativate /vol/rnaseq1/conda/conda_envi
+conda install -c bioconda fastqc
+
+conda config --add channels defaults
+conda config --add channels bioconda
+conda config --add channels conda-forge
+conda install -c bioconda multiqc
+```
+``` {bash}
+# execute fastqc for the samples and store the results in a separate folder qc
+mkdir qc
+fastqc liver_14.5_RNA_1.fastq.gz liver_14.5_RNA_2.fastq.gz liver_15.5_RNA_1.fastq.gz liver_15.5_RNA_2.fastq.gz
+```
+![](https://i.imgur.com/5oQuTom.png)
+![](https://i.imgur.com/oSZQF1n.png)
+```
+#The results show that the data is of good quality as the scores are in the green region. Per sequence tile quality also looks good, showing no errors in flowcell. 
+```
+
+```
+# Execute multiqc in the folder qc and explore the results
+multiqc fastqc/
+#all the files showed good quality data and the peak score was arount 37-38.
+```
+![](https://i.imgur.com/JrESVKC.png)
+![](https://i.imgur.com/uStcZeA.png)
+
+# Gather pipeline output
+``` {bash}
+# check pipeline.db (no issues)
+cat pipeline.db
+```
+``` {bash}
+# check trace.txt (all the programmes completed successfully)
+cat trace.txt
+```
+``` {bash}
+# more organized folder structure
+while read sample runid file type content readType readStrand; do
+                  outputFolder="The $sample sample has a file of type $type"
+                  echo $outputFolder
+done < pipeline.db
+```
+``` {bash}
+# share results with other rna-seq group
+cd /vol/data/share/RNA-seq
+mkdir rnaseq1
+cd rnaseq1
+mkdir RSEM
+ln -s /vol/disk1/rnaseq1/pipeline/work/*/*/*.results
+```
+
+# Quality Control, step 2: RNA-seQC
+``` {bash}
+# create a work folder
+mkdir /vol/disk1/rnaseq1/qc/seQC
+
+# subfolder and link to the genomic bam files
+```
+
+# Exploratory Analysis using IGV
+```
+# select folder in big wig (.bw) file (in folder work)
+# we observe unexpressed genes
+```
+
+![](https://i.imgur.com/78qkaIa.png)
+```
+#We can observe variations between liver and kidney samples  
+```
+
+# Differential analysis with edgeR
+``` {bash}
+# set up new work folder, using results in RSEM output files
+mkdir differential
+cd differential
+ln -s /vol/data/share/RNA-seq/*/RSEM/*.results .
+```
+``` {bash}
+# install packages edgeR, tximport
+conda install -c bioconda bioconductor-edger
+conda install -c bioconda bioconductor-tximport
+```
+``` {bash}
+# initialte R
+R
+```
+``` {r}
+# make dataframe
+setwd("/vol/disk1/rnaseq1/differential")
+genes <- list.files(path = ".", pattern = "*genes.results")
+genes <- as.charactor(genes)
+isoforms <- list.files(path = ".", pattern = "*isoforms.results")
+isoforms <- as.charactor(isoforms)
+sampleID <- c("kidney_14.5_1","kidney_14.5_2","kidney_15.5_1","kidney_15.5_2","liver_14.5_1","liver_14.5_2","liver_15.5_1","liver_15.5_2")
+timepoint <- c(14.5,14.5,15.5,15.5,14.5,14.5,15.5,15.5)
+replicate <- c(1,2,1,2,1,2,1,2)
+group <- c(rep("kidney",4),rep("liver",4))
+differential <- data.frame(genes,isoforms,sampleID,timepoint,replicate,group)
+```
+``` {r}
+# load data with tximport
+library(tximport)
+txi <- tximport(file = differential$gene, type = "rsem")
+abundance <- as.data.frame(txi)
+```
+``` {r}
+# create a design matrix based on group
+library(edgeR)
+group <- factor(differential$group)
+counts <- as.matrix(abundance[9:16])
+y <- DGEList(counts,group=group)
+design <- model.matrix(~group)
+y <- estimateDisp(y,design)
+```
+``` {r}
+# differential analysis with the quasi-likelihood F test
+method
+fit <- glmQLFit(y,design)
+qlf <- glmQLFTest(fit,coef=2)
+dim(abundance)
+quasiF <- data.frame(topTags(qlf,1804))
+save(quasiF, file = "./quasiF.RData")
+save(abundance, file = "./abundance.RData")
+```
+``` {bash}
+# install biomaRt
+conda install -c bioconda bioconductor-biomart
+```
+``` {bash}
+# Create an annotation table
+biomartConnection <- useMart( "ensembl",
+dataset="mmusculus_gene_ensembl" )
+geneAnnotation <- getBM( attributes=c(
+"ensembl_gene_id", "external_gene_name", "description" ),
+                        mart=biomartConnection
+                    )
+```            
+``` {r}
+# refresh gene name
+rownames(quasiF) <- as.character(rownames(quasiF))
+rownames(quasiF) <- unlist(strsplit(rownames(quasiF), split=“.” fixed=TRUE))[seq(1,3608,2)]
+```
+``` {r}
+# combine geneAnnotation
+rownames(geneAnnotation) <- geneAnnotation[,1]
+Annotation_sheet <- merge(quasiF,geneAnnotation,by=2)
+```
+``` {r}
+# save to disk
+save(Annotated_sheet, file="./Annotated_sheet.RData")
+
+cpmlist <- cpm(y)
+head(cpmlist)
+save(cpmlist, file="cpmlist.RData")
+```
+
+# Exploratory Analysis using edgeR
+
+## Heatmaps
+``` {r}
+# Extract genes with FDR <= 0.01 and |logFC| >= 2
+rownames(Annotated_sheet) <- Annotated_sheet$Row.names
+name
+A <- subset(Annotated_sheet[,2:6], FDR>=0.01&abs(logFC)>=2)
+
+# 132 genes left
+```
+``` {r}
+# Create Heatmap
+library(ComplexHeatmap)
+
+heatmap(cpmlist,  main = "Significant genes (FDR <= 0.01 and |logFC| >= 2)")
+```
+![](https://i.imgur.com/vEBxeD0.png)
+
+
+# Integrative Analysis
+```
+#loaded the reports and viewed in IGV
+
+#IGV analysis
+
+#found correlations of histone marks with DNA methylation 
+#such as low DNA methylation and peaks in H3K4me3 and acetylation, crests in H3K9me3 as seen in 1010001N08Nik and the opposite in Thoc1 promoter region.
+```
+![](https://i.imgur.com/VyO6TIL.png)
+```
+#3.Methylation generally high
+#4.Genes such as ppp2r2b are not expressed
+```
+![](https://i.imgur.com/LvF4DIX.png)
+
+```
+## Chromatin states and DNA methylation
+# we used the early liver data files for the analysis
+#it was performed in rnaseq1 home folder
+bedtools intersect -wa -wb -a /vol/data/share/ChIP-seq/chipseq4/segmentation/HMM_output/liver_16_segments.bed -b /vol/data/share/WGBS/wgbs3/bed/liver_early_1_cpg.bed.gz > integrate.bed
+bedtools groupby -i integrate.bed -g 1,2,3,4 -c 9 > methylation.RData
+
+
+
+
+
